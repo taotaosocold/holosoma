@@ -372,7 +372,8 @@ def setup_object_data(
 
     raise ValueError(f"Unknown task type: {task_type}")
 
-
+# 计算机器人的初始配置 q_init_base，格式符合 MuJoCo 要求：[x,y,z, qw,qx,qy,qz, joint_angles...]
+# 根据任务类型提取第一帧的人类根位置和朝向，并拼接零向量作为初始关节角度。
 def _compute_q_init_base(
     task_type: TaskType,
     data_format: str,
@@ -433,7 +434,7 @@ def _compute_q_init_base(
 
     return q_init_base
 
-
+# 将物体位姿从 [qw,qx,qy,qz,x,y,z] 转换为 MuJoCo 习惯的顺序 [x,y,z,qw,qx,qy,qz]
 def convert_object_poses_to_mujoco_order(object_poses: np.ndarray) -> np.ndarray:
     """Convert object poses from [qw, qx, qy, qz, x, y, z] to MuJoCo order [x, y, z, qw, qx, qy, qz].
     Args:
@@ -462,21 +463,22 @@ def build_retargeter_kwargs_from_config(
         Dictionary of kwargs for InteractionMeshRetargeter
     """
     kwargs = {
-        "task_constants": constants,
-        "object_urdf_path": object_urdf_path,
-        "q_a_init_idx": retargeter_config.q_a_init_idx,
-        "activate_joint_limits": retargeter_config.activate_joint_limits,
-        "activate_obj_non_penetration": retargeter_config.activate_obj_non_penetration,
-        "activate_foot_sticking": retargeter_config.activate_foot_sticking,
-        "foot_lock": retargeter_config.foot_lock,
-        "penetration_tolerance": retargeter_config.penetration_tolerance,
-        "foot_sticking_tolerance": retargeter_config.foot_sticking_tolerance,
-        "self_collision": retargeter_config.self_collision,
-        "step_size": retargeter_config.step_size,
-        "visualize": retargeter_config.visualize,
-        "debug": retargeter_config.debug,
-        "w_nominal_tracking_init": retargeter_config.w_nominal_tracking_init,
+        "task_constants": constants,    #包含机器人高度、关节名称、URDF 路径等任务相关常量
+        "object_urdf_path": object_urdf_path,   # 被交互物体的 URDF 文件路径，若无物体则为None
+        "q_a_init_idx": retargeter_config.q_a_init_idx, # 初始关节角度在 qpos 向量中的起始索引
+        "activate_joint_limits": retargeter_config.activate_joint_limits,   # 是否激活机器人关节角度/速度/力矩限位约束
+        "activate_obj_non_penetration": retargeter_config.activate_obj_non_penetration, # 是否激活物体非穿透约束（防止机器人与物体交叉）
+        "activate_foot_sticking": retargeter_config.activate_foot_sticking, # 是否激活脚部粘滞约束（保持脚与地面接触）
+        "foot_lock": retargeter_config.foot_lock,   # 是否强制锁定脚部（完全禁止移动）
+        "penetration_tolerance": retargeter_config.penetration_tolerance,   # 穿透容忍距离（米）
+        "foot_sticking_tolerance": retargeter_config.foot_sticking_tolerance,   # 脚部粘滞容忍距离（米）
+        "self_collision": retargeter_config.self_collision,     # 是否考虑机器人自碰撞
+        "step_size": retargeter_config.step_size,       # 	优化求解器的步长
+        "visualize": retargeter_config.visualize,   # 是否在求解过程中显示可视化
+        "debug": retargeter_config.debug,   # 是否开启调试模式（输出更多信息）
+        "w_nominal_tracking_init": retargeter_config.w_nominal_tracking_init,   # 标称轨迹跟踪权重的初始值
     }
+    # 仅攀爬任务：跟踪权重的衰减时间常数
     if task_type == "climbing":
         kwargs["nominal_tracking_tau"] = retargeter_config.nominal_tracking_tau
     return kwargs
@@ -604,6 +606,7 @@ def main(cfg: RetargetingConfig) -> None:
         cfg: Configuration arguments
     """
     # Validate configuration
+    # 从 cfg 中提取机器人名、任务名、任务类型
     validate_config(cfg)
 
     robot = cfg.robot
@@ -640,11 +643,13 @@ def main(cfg: RetargetingConfig) -> None:
     )
 
     # Load motion data
+    # 加载运动数据
     human_joints, object_poses, smpl_scale = load_motion_data(
         task_type, data_format, data_path, task_name, constants, cfg.motion_data_config
     )
 
     # Get toe names from motion data config (depends only on data_format)
+    # 获取脚趾名称
     toe_names = cfg.motion_data_config.toe_names
 
     # Setup object data
@@ -659,6 +664,7 @@ def main(cfg: RetargetingConfig) -> None:
     )
 
     # Create retargeter
+    # 创建重定向器
     retargeter_kwargs = build_retargeter_kwargs_from_config(cfg.retargeter, constants, object_urdf_path, task_type)
     retargeter = InteractionMeshRetargeter(**retargeter_kwargs)
     logger.info("Retargeter created")

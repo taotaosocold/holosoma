@@ -228,6 +228,8 @@ JOINTS_MAPPINGS = {
     },
     ("lafan", "casbot_skeleton"): {
         "Spine1": "base_link",
+        # pelvic_yaw_link is ~9.5 cm BELOW base_link at neutral — correct topology
+        # (pelvic_pitch_link is +5.75 cm ABOVE base_link, inverting hip geometry)
         "LeftUpLeg": "left_leg_pelvic_pitch_link",
         "RightUpLeg": "right_leg_pelvic_pitch_link",
         "LeftLeg": "left_leg_knee_pitch_link",
@@ -236,12 +238,15 @@ JOINTS_MAPPINGS = {
         "RightArm": "right_shoulder_roll_link",
         "LeftForeArm": "left_elbow_pitch_link",
         "RightForeArm": "right_elbow_pitch_link",
-        "LeftFoot": "left_leg_ankle_pitch_link",
-        "RightFoot": "right_leg_ankle_pitch_link",
-        "LeftToeBase": "left_leg_ankle_roll_link",
-        "RightToeBase": "right_leg_ankle_roll_link",
-        "LeftHand": "left_wrist_yaw_link",
-        "RightHand": "right_wrist_yaw_link",
+        # ankle_roll_link sits at ~7.85 cm above ground at neutral pose, matching
+        # the scaled SMPLH/LAFAN ankle height (~7–8 cm) much better than
+        # ankle_intermediate_link (~10.85 cm) which was forcing the knee to bend.
+        "LeftFoot": "left_leg_ankle_roll_link",
+        "RightFoot": "right_leg_ankle_roll_link",
+        "LeftToeBase": "left_foot_tip_link",       # virtual link at actual toe position
+        "RightToeBase": "right_foot_tip_link",      # virtual link at actual toe position
+        "LeftHand": "left_hand_link",
+        "RightHand": "right_hand_link",
     },
     ("smplh", "casbot"): {
         "Pelvis": "base_link",
@@ -262,20 +267,26 @@ JOINTS_MAPPINGS = {
     },
     ("smplh", "casbot_skeleton"): {
         "Pelvis": "base_link",
-        "L_Hip": "left_leg_pelvic_pitch_link",
-        "R_Hip": "right_leg_pelvic_pitch_link",
+        # pelvic_yaw_link is ~9.5 cm BELOW base_link at neutral — correct topology.
+        # pelvic_pitch_link (previous value) is +5.75 cm ABOVE base_link,
+        # inverting the Pelvis→Hip direction vs. the human, causing pelvis tilt.
+        "L_Hip": "left_leg_pelvic_yaw_link",
+        "R_Hip": "right_leg_pelvic_yaw_link",
         "L_Knee": "left_leg_knee_pitch_link",
         "R_Knee": "right_leg_knee_pitch_link",
         "L_Shoulder": "left_shoulder_roll_link",
         "R_Shoulder": "right_shoulder_roll_link",
         "L_Elbow": "left_elbow_pitch_link",
         "R_Elbow": "right_elbow_pitch_link",
-        "L_Ankle": "left_leg_ankle_pitch_link",
-        "R_Ankle": "right_leg_ankle_pitch_link",
-        "L_Toe": "left_leg_ankle_roll_link",
-        "R_Toe": "right_leg_ankle_roll_link",
-        "L_Wrist": "left_wrist_yaw_link",
-        "R_Wrist": "right_wrist_yaw_link",
+        # ankle_roll_link at ~7.85 cm above ground (neutral) matches scaled human
+        # ankle height (~7–8 cm). ankle_intermediate_link was at ~10.85 cm,
+        # forcing the knee to bend to pull the ankle down to the target.
+        "L_Ankle": "left_leg_ankle_roll_link",
+        "R_Ankle": "right_leg_ankle_roll_link",
+        "L_Toe": "left_foot_tip_link",         # virtual link at actual toe position
+        "R_Toe": "right_foot_tip_link",         # virtual link at actual toe position
+        "L_Wrist": "left_hand_link",            # hand_link is more distal than wrist_yaw
+        "R_Wrist": "right_hand_link",
     },
     ("smplh", "g1"): {
         "Pelvis": "pelvis_contour_link",
@@ -381,7 +392,7 @@ class FormatConstants(TypedDict, total=False):
 
 DATA_FORMAT_CONSTANTS: dict[str, FormatConstants] = {
     "lafan": {
-        "default_scale_factor": 1.27 / 1.7,
+        "default_scale_factor": 1.53 / 1.7,
     },
     "mocap": {
         "default_human_height": 1.78,

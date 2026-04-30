@@ -18,8 +18,8 @@ class RobotDefaults(TypedDict):
 _ROBOT_DEFAULTS: dict[str, RobotDefaults] = {
     "g1": {"robot_dof": 29, "robot_height": 1.32, "object_name": "ground"},
     "t1": {"robot_dof": 23, "robot_height": 1.2, "object_name": "ground"},
-    "casbot": {"robot_dof": 25, "robot_height": 2.5, "object_name": "ground"},
-    "casbot_skeleton": {"robot_dof": 27, "robot_height": 1.6, "object_name": "ground"},
+    "casbot": {"robot_dof": 25, "robot_height": 1.65, "object_name": "ground"},
+    "casbot_skeleton": {"robot_dof": 27, "robot_height": 1.55, "object_name": "ground"},
 }
 
 
@@ -163,8 +163,14 @@ class RobotConfig:
             ]
         if self.robot_type == "casbot_skeleton":
             return [
-                "left_leg_ankle_roll_link",
-                "right_leg_ankle_roll_link",
+                "left_foot_sphere_1_link",
+                "right_foot_sphere_1_link",
+                "left_foot_sphere_2_link",
+                "right_foot_sphere_2_link",
+                "left_foot_sphere_3_link",
+                "right_foot_sphere_3_link",
+                "left_foot_sphere_4_link",
+                "right_foot_sphere_4_link",
             ]
         raise ValueError(f"Invalid robot type: {self.robot_type}")
 
@@ -194,6 +200,21 @@ class RobotConfig:
                 }
             )
 
+        if self.robot_type in ("casbot", "casbot_skeleton"):
+            # q_a_indices = np.arange(0, 34) when q_a_init_idx=-7.
+            # Indices below map to qpos[] positions:
+            #   [8]  = left_pelvic_roll   [9]  = left_pelvic_yaw
+            #   [14] = right_pelvic_roll  [15] = right_pelvic_yaw
+            # Restrict hip yaw to ±20° to prevent knee-crossover / valgus collapse.
+            # Restrict right pelvic_roll to prevent excessive inward abduction.
+            base.update(
+                {
+                    "9": -0.35,   # left_pelvic_yaw  lower bound
+                    "14": -0.52,  # right_pelvic_roll lower bound (~-30° abduction)
+                    "15": -0.35,  # right_pelvic_yaw lower bound
+                }
+            )
+
         return base
 
     MANUAL_LB = property(_manual_lb, doc="Get manual lower bounds.")
@@ -220,6 +241,16 @@ class RobotConfig:
                 }
             )
 
+        if self.robot_type in ("casbot", "casbot_skeleton"):
+            # Restrict hip yaw to ±20° and left pelvic_roll to ~+30° max abduction.
+            base.update(
+                {
+                    "8": 0.52,   # left_pelvic_roll  upper bound (~+30° abduction)
+                    "9": 0.35,   # left_pelvic_yaw   upper bound
+                    "15": 0.35,  # right_pelvic_yaw  upper bound
+                }
+            )
+
         return base
 
     MANUAL_UB = property(_manual_ub, doc="Get manual upper bounds.")
@@ -231,6 +262,8 @@ class RobotConfig:
 
         if self.robot_type == "g1":
             return {"19": 0.2, "20": 0.2}  # waist yaw, waist roll
+        if self.robot_type in ("casbot", "casbot_skeleton"):
+            return {"9": 0.3, "15": 0.3}  # left/right pelvic_yaw penalty
         return {}
 
     MANUAL_COST = property(_manual_cost, doc="Get manual cost weights.")
@@ -244,6 +277,13 @@ class RobotConfig:
             return np.arange(19)
         if self.robot_type == "t1":
             return np.concatenate([np.arange(7), np.arange(11, 23)])
+        if self.robot_type in ("casbot", "casbot_skeleton"):
+            # With q_a_init_idx=-7, q_a_n_last[k] = qpos[k].
+            # qpos[0:7]  = freejoint (should NOT be nominal-tracked).
+            # qpos[7:19] = actuator[0:12] = all 12 leg joints (both legs).
+            # Tracking these keeps the legs near a standing pose during the
+            # initial frames before Laplacian deformation takes over.
+            return np.arange(7, 19)
         # Default: return empty array if robot type not defined (nominal tracking not used)
         return np.array([], dtype=int)
 

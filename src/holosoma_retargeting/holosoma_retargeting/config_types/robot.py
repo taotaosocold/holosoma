@@ -19,7 +19,7 @@ _ROBOT_DEFAULTS: dict[str, RobotDefaults] = {
     "g1": {"robot_dof": 29, "robot_height": 1.32, "object_name": "ground"},
     "t1": {"robot_dof": 23, "robot_height": 1.2, "object_name": "ground"},
     "casbot": {"robot_dof": 25, "robot_height": 1.65, "object_name": "ground"},
-    "casbot_skeleton": {"robot_dof": 27, "robot_height": 1.55, "object_name": "ground"},
+    "casbot_skeleton": {"robot_dof": 25, "robot_height": 1.65, "object_name": "ground"},
 }
 
 

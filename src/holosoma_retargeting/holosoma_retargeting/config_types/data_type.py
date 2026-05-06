@@ -392,6 +392,7 @@ class FormatConstants(TypedDict, total=False):
 
 DATA_FORMAT_CONSTANTS: dict[str, FormatConstants] = {
     "lafan": {
+        # "default_scale_factor": 1.27 / 1.7,
         "default_scale_factor": 1.53 / 1.7,
     },
     "mocap": {

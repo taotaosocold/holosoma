@@ -428,7 +428,10 @@ class InteractionMeshRetargeter:
                     human_mapped_joints_in_object = transform_points_world_to_local(
                         object_quat_demo, object_trans_demo, human_mapped_joints
                     )
-
+                # 这里传入了两个值分别是以物体为坐标系，人体的关节点的局部坐标值，以及以物体为坐标系，物体表面采样的点的局部坐标值
+                # 这里传出的source_vertices就是stack后的值，形状为[v,3]，而source_tetrahedra
+                # 是根据这些点为顶点来构建一堆四面体，source_tetrahedra的形状为[N,4]其中N表示面的数量，4是索引，得去source_vertices中找具体坐标的位置
+                # 假设v=4那么N就一定是1，因为四个顶点只能构成1个四面体，并且内容为[0,1,2,3]，但是这里v=115（15个人体映射点以及100个物体采样点）构成的四面体数量不确定
                 source_vertices, source_tetrahedra = create_interaction_mesh(
                     np.vstack([human_mapped_joints_in_object, object_points_local_demo])
                 )
@@ -454,7 +457,10 @@ class InteractionMeshRetargeter:
                     )  # 100 X 3
 
                 # Create adjacency list and calculate target Laplacian coordinates
+                # 我直接说这个得到的结果，这个adj_list是一个列表或者说是邻接表，内容为长度为[v]，每一项都是一个集合，表示这个定顶点i相邻的所有点的集合（不包括自身）
                 adj_list = get_adjacency_list(source_tetrahedra, len(source_vertices))
+                # 计算每个节点的拉普拉斯坐标，它描述了一个顶点相对于其邻居质心的偏差向量，即laplacian_i=v_i-(所有邻居的平均位置),得到的形状为[v,3]
+                # 所以这里要传入source_vertices因为要传入真实坐标
                 target_laplacian = calculate_laplacian_coordinates(source_vertices, adj_list)
 
                 # Run optimization
@@ -462,7 +468,7 @@ class InteractionMeshRetargeter:
                     w_nominal_tracking = self.w_nominal_tracking_init
                 else:
                     w_nominal_tracking = self.w_nominal_tracking_init * np.exp(-i / self.nominal_tracking_tau)
-
+                # 逐帧优化
                 q, cost = self.iterate(
                     q_locked=q_locked_list[i],
                     q_n=q,

@@ -45,13 +45,13 @@ def calculate_scale_factor(task_name, robot_height):
 
 
 def load_object_data(
-    object_file,
-    smpl_scale=0.714,
-    bounding_box_oriented=False,
-    sample_count=50,
+    object_file,        # 物体网格文件路径（.obj, .ply 等）
+    smpl_scale=0.714,   # 人体→机器人的缩放因子
+    bounding_box_oriented=False,    # # 是否使用有向包围盒顶点代替表面采样
+    sample_count=50,    # 表面采样点数
     seed=42,
-    surface_weights=None,
-    use_face_normals=False,
+    surface_weights=None,   # 权重函数（用于加权采样）
+    use_face_normals=False, # 权重函数是否基于面法线
 ):
     """
     Loads an object mesh and samples points from its surface.
@@ -70,13 +70,16 @@ def load_object_data(
         tuple: (points, points_scaled) - original and scaled point arrays.
     """
     print("Loading and sampling object mesh...")
+    # 加载三维模型并强制转化为网格对象mesh确保即使文件包含点云、骨架等其他数据，也会转成三角网格
     obj_mesh = trimesh.load(object_file, force="mesh")
-
+    # 有向包围盒模式，直接取物体 OBB 的 8 个角点（在局部坐标系下）
     if bounding_box_oriented:
         points = obj_mesh.bounding_box_oriented.vertices
+    # 不然的话如果有设置表面的权重，则进行非均匀采样，让某些区域（如攀爬地形的顶面）获得更多点
     elif surface_weights is not None:
         if use_face_normals:
             # Use face-normal-based weighted sampling
+            # 最后生成的点是局部坐标位置[sampled_point, 3]，是根据物体全局位置的局部位置
             points = weighted_surface_sampling_by_face_normal(obj_mesh, sample_count, surface_weights, seed)
         else:
             # Use center-based weighted sampling
@@ -86,6 +89,7 @@ def load_object_data(
 
     points = np.array(points)
     points_scaled = points * smpl_scale
+    # 返回的是点的局部位置，以及点的局部位置乘上缩放后的值
     return points, points_scaled
 
 
@@ -102,14 +106,16 @@ def weighted_surface_sampling(mesh, sample_count, weight_func, seed=42):
     Returns:
         np.ndarray: Sampled points
     """
+    # 保证每次运行对同一网格的采样结果可重现
     np.random.seed(seed)
-
+    # # (F, 3) 的顶点索引数组（每个面存在三个顶点坐标，构成三角形）
     faces = mesh.faces
+    # (V, 3) 的顶点坐标数组（根据faces来锁定不同面的具体坐标位置）
     vertices = mesh.vertices
 
     face_areas = []
     face_centers = []
-
+    # 计算每个面的 面积 和 中心点
     for face in faces:
         v1, v2, v3 = vertices[face]
         area = 0.5 * np.linalg.norm(np.cross(v2 - v1, v3 - v1))
@@ -120,15 +126,16 @@ def weighted_surface_sampling(mesh, sample_count, weight_func, seed=42):
 
     face_areas = np.array(face_areas)
     face_centers = np.array(face_centers)
-
+    # 计算每个面的 权重 与 加权面积，这里会根据定义的权重函数weight_func来遍历每一个面的中心点坐标值，根据坐标值的情况来决定每一个面的权重值（比如中心点越高权重值越大）
     weights = np.array([weight_func(center) for center in face_centers])
+    # 最终每一个面的权重值又会在乘上每一个面的面积，也就是假设weight_func是根据中心点的高度来给权重，那么中心点高度越高并且面的面积越大的面权重值越高
     weighted_areas = face_areas * weights
-
+    # 根据权重值计算每一个面的采样概率（也就是归一化）
     total_weighted_area = np.sum(weighted_areas)
     face_probs = weighted_areas / total_weighted_area
-
+    # 根据概率采样面
     sampled_face_indices = np.random.choice(len(faces), size=sample_count, p=face_probs)
-
+    # 在选中的面上随机生成点（均匀分布）
     sampled_points = []
     for face_idx in sampled_face_indices:
         face = faces[face_idx]
@@ -369,7 +376,7 @@ def transform_from_human_to_world(human_initial_root, object_initial_pose, local
     quat = R.from_matrix(rotation_matrix).as_quat(scalar_first=True)
     return rotation_matrix @ local_translation, quat
 
-
+# 传入quat和trans根据两个信息构建坐标系，将所有关节点points_world转化为这个坐标系下的局部值
 def transform_points_world_to_local(quat, trans, points_world):
     """
     Transform points from world frame to local frame.
@@ -747,7 +754,11 @@ def transform_y_up_to_z_up(points):
         return transformed.reshape(original_shape)
     raise ValueError(f"Unsupported number of dimensions: {points.ndim}")
 
-
+# 我来大概讲一下这个是如何获得人体第一帧的根位置的全局偏航朝向信息的
+# 在脊柱上存在两个点，是除了根朝向改变外，其他点朝向改变都不受影响的，就是“spine”和“Hips”（在机器人中一般是“torso”和“pelvis”）
+# 并且在人体中“spine”是在“Hips”后面的，那么就用Hips的全局坐标-spine的全局坐标，得到一个向量，然后在投影到z轴上，就是前向偏航方向的方向向量了
+# 然后获得左脚和LeftUpLeg和右脚RightUpLeg的全局坐标，用左脚-右脚的全局坐标然后在投影到z轴上，就获得了左方向偏航方向的方向向量了
+# 那么已知坐标系的forward方向和left方向，根据右手螺旋定则知道Up方向，那么就知道第一帧的根四元数朝向
 def estimate_human_orientation(human_joints, joint_names, frame_idx=0):
     """
     Estimate the human's global orientation quaternion based on joint positions.

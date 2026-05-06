@@ -45,7 +45,7 @@ class InteractionMeshRetargeter:
 
     def __init__(
         self,
-        task_constants: ModuleType,
+        task_constants: ModuleType,     # 包含robot_urdf_file，robot_dof等
         object_urdf_path: str,
         q_a_init_idx: int = -7,
         activate_foot_sticking: bool = True,
@@ -366,15 +366,15 @@ class InteractionMeshRetargeter:
 
     def retarget_motion(
         self,
-        human_joint_motions,
-        object_poses,
-        object_poses_augmented,
-        object_points_local_demo,
-        object_points_local,
-        foot_sticking_sequences,
-        q_a_init=None,
-        q_nominal_list=None,
-        original=True,
+        human_joint_motions,    # (T, J, 3) 人体关节全局位置
+        object_poses,           # (T, 7) 物体演示位姿 [x,y,z,qw,qx,qy,qz]
+        object_poses_augmented, # (T, 7) 物体实际位姿（增强或等效）
+        object_points_local_demo,   # (N,3) 物体采样点的局部值乘上缩放值smpl_scale后的值
+        object_points_local,        # (N,3) 物体采样点的局部值
+        foot_sticking_sequences,    # 每帧左右脚是否粘滞的布尔值
+        q_a_init=None,      # 第一帧的机器人初始位姿
+        q_nominal_list=None,    # 可选的完整名义轨迹 (T, nq)，增强模式使用
+        original=True,  # True 为原始重定向，False 为增强重定向
         dest_res_path=None,
     ):
         """
@@ -413,15 +413,18 @@ class InteractionMeshRetargeter:
         with tqdm(range(num_frames)) as pbar:
             for i in pbar:
                 # Get object poses and transform points
+                # 获取物体的全局朝向和全局位置
                 object_quat_demo = object_poses[i, 3:]
                 object_trans_demo = object_poses[i, :3]
 
                 # Get human joint positions and create interaction mesh in object frame
+                # 选择人体所有关节点中映射的那几个关节点
                 human_mapped_joints = human_joint_motions[i, self.smplh_mapped_joint_indices]
-
+                # 如果交互物体是地面，则仍然是那几个关节点
                 if self.object_name == "ground":
                     human_mapped_joints_in_object = human_mapped_joints
                 else:
+                    # 不然的话会转化为以物体为根节点和根朝向做坐标系，人体的关节点的所有局部坐标值
                     human_mapped_joints_in_object = transform_points_world_to_local(
                         object_quat_demo, object_trans_demo, human_mapped_joints
                     )

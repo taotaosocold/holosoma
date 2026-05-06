@@ -52,6 +52,7 @@ logger = logging.getLogger(__name__)
 # ----------------------------- Constants -----------------------------
 
 # Task-specific defaults
+# 这里已经强行设置了
 DEFAULT_DATA_FORMATS = {
     "robot_only": "smplh",
     "object_interaction": "smplh",
@@ -72,6 +73,7 @@ _AUGMENTATION_TRANSLATION = np.array([0.2, 0.0, 0.0])
 
 
 # Type aliases
+# 只支持三种任务类型：只有机器人重定向、物体交互（物体会跟着动）、攀爬类动作（物体不动）
 TaskType = Literal["robot_only", "object_interaction", "climbing"]
 # DataFormat is imported from config_types.data_type
 
@@ -99,6 +101,7 @@ def create_task_constants(
     task_constants = SimpleNamespace()
 
     # Copy all attributes from robot_config
+    # 遍历robot_config配置文件
     for attr in dir(robot_config):
         if attr.isupper() and not attr.startswith("_"):
             setattr(task_constants, attr, getattr(robot_config, attr))
@@ -202,43 +205,51 @@ def load_motion_data(
         FileNotFoundError: If required data files are not found
     """
     logger.info("Loading motion data for task: %s, format: %s", task_name, data_format)
-
+    # 如果只重定向机器人
     if task_type == "robot_only":
+        # 如果是lafan数据集，则接受的是.npy文件
         if data_format == "lafan":
             npy_path = data_path / f"{task_name}.npy"
             if not npy_path.exists():
                 raise FileNotFoundError(f"LAFAN data file not found: {npy_path}")
-
+            # 直接加载人体数据集，获得每个关节在世界坐标系下的3D位置不包括朝向
             human_joints = np.load(str(npy_path))
+            # 调用transform_y_up_to_z_up 将 y-up 转为 z-up
             human_joints = transform_y_up_to_z_up(human_joints)
             spine_joint_idx = constants.DEMO_JOINTS.index("Spine1")
             # LAFAN-specific spine adjustment
             human_joints[:, spine_joint_idx, -1] -= 0.06
+            # 缩放因子
             smpl_scale = motion_data_config.default_scale_factor or 1.0
+        # 如果是smplh数据也就是OMOMO数据集那么加载的是.pt文件
         elif data_format == "smplh":  # smplh
             pt_path = data_path / f"{task_name}.pt"
             if not pt_path.exists():
                 raise FileNotFoundError(f"InterMimic data file not found: {pt_path}")
-
+            # 加载数据返回的是人体和物体的相关数据，并且默认是z-up
             human_joints, object_poses = load_intermimic_data(str(pt_path))
             smpl_scale = calculate_scale_factor(task_name, constants.ROBOT_HEIGHT)
+        # 如果是mocap类型的数据，也就是通过动捕自行获得的数据集，是.npy形式
         elif data_format == "mocap":
             downsample = 4
             npy_file = data_path / f"{task_name}.npy"
             if not npy_file.exists():
                 raise FileNotFoundError(f"MOCAP data file not found: {npy_file}")
-
+            # 获得每个人体关节在世界坐标系下的3D位置不包括朝向，并且默认为z-up
             human_joints = np.load(str(npy_file))[::downsample]
 
             default_human_height = motion_data_config.default_human_height or 1.78
             smpl_scale = constants.ROBOT_HEIGHT / default_human_height
+        # 如果是AMASS数据集也就是smplx类型数据，加载的就是.npz文件
         elif data_format == "smplx":
             npz_file = data_path / f"{task_name}.npz"
 
             human_data = np.load(str(npz_file))
+            # 获得每个关节在世界坐标系下的3D位置不包括朝向
             human_joints = human_data["global_joint_positions"]
             human_height = human_data["height"]
             smpl_scale = constants.ROBOT_HEIGHT / human_height
+        # 如果是其他自定义的数据，同AMASS数据处理方式
         else:
             # For other custom data format, if it uses consistent .npz file like SMPLX,
             # you can use the same logic as SMPLX.
@@ -252,17 +263,18 @@ def load_motion_data(
         # Create dummy object poses for robot_only
         num_frames = human_joints.shape[0]
         object_poses = np.tile(np.array([[1, 0, 0, 0, 0, 0, 0]]), (num_frames, 1))
-
+    # 如果重定向机器人和物体（也就是物体也要动）
     elif task_type == "object_interaction":
+        # 那么这里数据必须是.pt文件的格式，也就是一定得是OMOMO数据（也不好说）
         pt_path = data_path / f"{task_name}.pt"
         if not pt_path.exists():
             raise FileNotFoundError(f"InterMimic data file not found: {pt_path}")
-
         human_joints, object_poses = load_intermimic_data(str(pt_path))
         smpl_scale = calculate_scale_factor(task_name, constants.ROBOT_HEIGHT)
-
+    # 如果是攀爬类型的数据（也就是物体不会动）
     elif task_type == "climbing":
         task_dir = data_path / task_name
+        # 加载.npy数据
         npy_files = list(task_dir.glob("*.npy"))
         if not npy_files:
             raise FileNotFoundError(f"No .npy file found in {task_dir}")
@@ -285,12 +297,12 @@ def load_motion_data(
 
 
 def setup_object_data(
-    task_type: TaskType,
-    constants: SimpleNamespace,
-    object_dir: Path | None,
+    task_type: TaskType,    # 任务类型：climbing、robot_only、object_interaction
+    constants: SimpleNamespace, # 任务常量，包含机器人尺寸、物体网格路径等信息
+    object_dir: Path | None,    # 攀爬任务的物体目录路径
     smpl_scale: float,
-    task_config: TaskConfig,
-    augmentation: bool,
+    task_config: TaskConfig,    # 任务特定配置（如地面范围、权重阈值等）
+    augmentation: bool,     # 是否数据增强
     object_scale_augmented: np.ndarray | None = None,
 ) -> tuple[np.ndarray | None, np.ndarray | None, str | None]:
     """Setup object-specific data (ground, object mesh, climbing terrain).
@@ -309,22 +321,25 @@ def setup_object_data(
     if object_scale_augmented is None:
         object_scale_augmented = np.array([1.0, 1.0, 1.2])  # For climbing task augmentation
     logger.info("Setting up object data for task: %s", task_type)
-
+    # 如果只有机器人，那么就是只和地面进行交互
     if task_type == "robot_only":
         # Create ground points meshgrid
+        # 在平面地面上生成一个矩形网格采样点
         ground_pts = create_ground_points(task_config.ground_range, task_config.ground_range, task_config.ground_size)
         return ground_pts, ground_pts, None
-
+    # 如果是和物体交互（但是物体是会动的）
     if task_type == "object_interaction":
         # Load object data
         if constants.OBJECT_MESH_FILE is None:
             raise ValueError("OBJECT_MESH_FILE not set for object_interaction task")
-
+        # object_local_pts 与 object_local_pts_demo 相同：
+        # 这是因为在物体交互任务中，演示物体和实际物体使用同一个模型（但数据增强模式下，会通过 augment_object_poses 在完整流程中改变物体的初始位姿，而非点云本身）
+        # 因为物体的网格数据其实是有很多点和面的，重定向的时候，是会采用其中部分的点，然后让机器人的手/脚来最小化和点的距离从而进行重定向
         object_local_pts, object_local_pts_demo = load_object_data(
             constants.OBJECT_MESH_FILE, smpl_scale=smpl_scale, sample_count=100
         )
         return object_local_pts, object_local_pts_demo, constants.OBJECT_URDF_FILE
-
+    # 如果是攀爬类动作（物体保持不动）
     if task_type == "climbing":
         if object_dir is None:
             raise ValueError("object_dir must be provided for climbing task")
@@ -375,12 +390,12 @@ def setup_object_data(
 # 计算机器人的初始配置 q_init_base，格式符合 MuJoCo 要求：[x,y,z, qw,qx,qy,qz, joint_angles...]
 # 根据任务类型提取第一帧的人类根位置和朝向，并拼接零向量作为初始关节角度。
 def _compute_q_init_base(
-    task_type: TaskType,
-    data_format: str,
-    human_joints: np.ndarray,
-    object_poses: np.ndarray,
-    constants: SimpleNamespace,
-    retargeter: InteractionMeshRetargeter | None = None,
+    task_type: TaskType,    # 任务类型："robot_only" | "object_interaction" | "climbing"
+    data_format: str,       # 数据格式："lafan" | "smplh" | "mocap" | "smplx" 等
+    human_joints: np.ndarray,   # (T, J, 3) 人体关节位置
+    object_poses: np.ndarray,   # (T, 7) 物体位姿 [qw,qx,qy,qz,x,y,z]
+    constants: SimpleNamespace, # 任务常量（包含 ROBOT_DOF, DEMO_JOINTS 等）
+    retargeter: InteractionMeshRetargeter | None = None,    # 攀爬任务需要传入 retargeter 以获取关节点列表
 ) -> np.ndarray:
     """Compute base robot pose initialization (q_init_base).
     This is a shared helper function used by both single and parallel processing.
@@ -395,24 +410,31 @@ def _compute_q_init_base(
         q_init_base in MuJoCo order: [0:3] position, [3:7] quaternion, [7:] joints
     """
     if task_type == "robot_only":
+        # 如果是lafan数据
         if data_format == "lafan":
+            # 获得根位置的索引
             spine_joint_idx = constants.DEMO_JOINTS.index("Spine1")
+            # 由于lafan数据不提供根节点的旋转信息，这个函数可以获得人体第一帧的根节点的水平全局朝向（即只有偏航信息，其他两个维度全是0），返回的是一个四元数[4]
             human_quat_init = estimate_human_orientation(human_joints, constants.DEMO_JOINTS)
             # MuJoCo order: pos first, then quat
+            # 这里机器人默认值其实dof_pos是全0，根位置也是直接取缩放后的人体第一帧的根位置，根朝向也是人体的处理后的朝向
             q_init_base = np.concatenate(
                 [human_joints[0, spine_joint_idx, :3], human_quat_init, np.zeros(constants.ROBOT_DOF)]
             )
         else:  # smplh
+            # 如果是AMASS数据
             _, human_quat_init = transform_from_human_to_world(
                 human_joints[0, 0, :], object_poses[0], np.array([0.0, 0.0, 0.0])
             )
             # MuJoCo order: pos first, then quat
+            # 这里机器人默认值其实dof_pos是全0，根位置也是直接取缩放后的人体第一帧的根位置，根朝向也是人体的处理后的朝向
             q_init_base = np.concatenate([human_joints[0, 0, :3], human_quat_init, np.zeros(constants.ROBOT_DOF)])
     elif task_type == "object_interaction":
         _, human_quat_init = transform_from_human_to_world(
             human_joints[0, 0, :], object_poses[0], np.array([0.0, 0.0, 0.0])
         )
         # MuJoCo order: pos first, then quat
+        # 这里机器人默认值其实dof_pos是全0，根位置也是直接取缩放后的人体第一帧的根位置，根朝向也是人体的处理后的朝向
         q_init_base = np.concatenate([human_joints[0, 0, :3], human_quat_init, np.zeros(constants.ROBOT_DOF)])
     elif task_type == "climbing":
         if retargeter is None:
@@ -422,6 +444,7 @@ def _compute_q_init_base(
         )
         spine_joint_idx = retargeter.demo_joints.index("Spine1")
         # MuJoCo order: pos first, then quat
+        # 这里机器人默认值其实dof_pos是全0，根位置也是直接取缩放后的人体第一帧的根位置，根朝向也是人体的处理后的朝向
         q_init_base = np.concatenate(
             [
                 human_joints[0, spine_joint_idx],
@@ -431,7 +454,7 @@ def _compute_q_init_base(
         )
     else:
         raise ValueError(f"Invalid task type: {task_type}")
-
+    # 返回值 q_init_base 的形状为 (7 + ROBOT_DOF,)：[x, y, z,   qw, qx, qy, qz,   joint_1, joint_2, ..., joint_DOF]
     return q_init_base
 
 # 将物体位姿从 [qw,qx,qy,qz,x,y,z] 转换为 MuJoCo 习惯的顺序 [x,y,z,qw,qx,qy,qz]
@@ -521,8 +544,9 @@ def initialize_robot_pose(
     if augmentation_translation is None:
         augmentation_translation = _AUGMENTATION_TRANSLATION
     logger.info("Initializing robot pose")
-
+    # 如果只有机器人
     if task_type == "robot_only":
+        # 从第一帧人体动作推出机器人的初始位姿
         q_init = _compute_q_init_base(task_type, data_format, human_joints, object_poses, constants)
         object_poses = convert_object_poses_to_mujoco_order(object_poses)
         return q_init, None, object_poses, human_joints, object_poses
@@ -614,6 +638,7 @@ def main(cfg: RetargetingConfig) -> None:
     task_type = cfg.task_type
 
     # Set defaults based on task type
+    # 设置默认值，如果命令未指定data_format 或 save_dir则设置为默认值
     data_format: str = cfg.data_format or DEFAULT_DATA_FORMATS[task_type]
     save_dir = cfg.save_dir if cfg.save_dir is not None else Path(DEFAULT_SAVE_DIRS[task_type].format(robot=robot))
     data_path = cfg.data_path
@@ -630,11 +655,12 @@ def main(cfg: RetargetingConfig) -> None:
         cfg.motion_data_config = MotionDataConfig(data_format=data_format, robot_type=robot)
 
     # Task-specific object setup: set default object_dir for climbing if not provided
+    # 如果是攀爬类任务并且没有提供object_dir则object_dir设置默认值
     if task_type == "climbing" and cfg.task_config.object_dir is None:
         from dataclasses import replace
 
         cfg.task_config = replace(cfg.task_config, object_dir=data_path / task_name)
-
+    # constants相当于加载了所有配置文件
     constants = create_task_constants(
         robot_config=cfg.robot_config,
         motion_data_config=cfg.motion_data_config,
@@ -643,7 +669,7 @@ def main(cfg: RetargetingConfig) -> None:
     )
 
     # Load motion data
-    # 加载运动数据
+    # 加载运动数据，其中human_joints是每个关节在世界坐标系下的位置，object_poses是物体在世界坐标系下的位置和朝向，smpl_scale是不同数据集缩放到机器人的缩放比例
     human_joints, object_poses, smpl_scale = load_motion_data(
         task_type, data_format, data_path, task_name, constants, cfg.motion_data_config
     )
@@ -653,6 +679,8 @@ def main(cfg: RetargetingConfig) -> None:
     toe_names = cfg.motion_data_config.toe_names
 
     # Setup object data
+    # 获得物体的数据，第一部分是物体表面采样点相对于物体中心点全局位置的局部位置，第二部分是第一部分的点的局部位置乘上了smpl_scale的缩放后的值
+    # 第三部分是物体的urdf文件的路径
     object_local_pts, object_local_pts_demo, object_urdf_path = setup_object_data(
         task_type,
         constants,
@@ -664,12 +692,15 @@ def main(cfg: RetargetingConfig) -> None:
     )
 
     # Create retargeter
-    # 创建重定向器
+    # 获取重定向的配置
     retargeter_kwargs = build_retargeter_kwargs_from_config(cfg.retargeter, constants, object_urdf_path, task_type)
+    # 根据配置初始化重定向器
     retargeter = InteractionMeshRetargeter(**retargeter_kwargs)
     logger.info("Retargeter created")
 
     # Preprocess motion data
+    # preprocess_motion_data 对原始人类动作数据进行高度对齐、整体缩放以及物体运动缩放，使数据适配目标机器人的尺寸和坐标系，为后续的重定向优化做好准备。
+    # 如果是只有机器人，那么就不对物体进行缩放
     if task_type == "robot_only":
         human_joints = preprocess_motion_data(human_joints, retargeter, toe_names, smpl_scale)
     elif task_type in {"object_interaction", "climbing"}:
@@ -682,6 +713,8 @@ def main(cfg: RetargetingConfig) -> None:
         )
 
     # Initialize robot pose
+    # 初始化机器人的位姿，第一个是机器人的初始位姿（根据加载的人体数据第一帧所得），第二个不用管几乎都是None，第三个是物体位姿（数据加强后，几乎也不用管）
+    # 第四个是人体全局值，第五个是物体位姿
     q_init, q_nominal, object_poses_augmented, human_joints, object_poses = initialize_robot_pose(
         task_type,
         data_format,

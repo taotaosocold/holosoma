@@ -11,7 +11,8 @@ from holosoma_retargeting.config_types.retargeter import RetargeterConfig
 from holosoma_retargeting.config_types.robot import RobotConfig
 from holosoma_retargeting.config_types.task import TaskConfig
 
-
+# tyro 默认将 Python 的蛇形命名 field_name 转换为 CLI 常见的连字符命名 --field-name
+# 如task_type → --task-type
 @dataclass
 class RetargetingConfig:
     """Top-level retargeting configuration used by the Tyro CLI.
@@ -45,6 +46,7 @@ class RetargetingConfig:
     """Whether to use augmentation."""
 
     # --- Nested configs ---
+    # 会根据不同的robot_type去生成robot_config，使用field会将RobotConfig这个字符串变成类，从而能够传入参数去实例化
     robot_config: RobotConfig = field(default_factory=lambda: RobotConfig(robot_type="g1"))
     """Robot configuration (nested - can override robot_urdf_file, robot_dof, etc.
     via --robot-config.robot-urdf-file)."""

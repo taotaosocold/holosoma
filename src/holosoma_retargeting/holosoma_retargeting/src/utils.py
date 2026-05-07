@@ -703,20 +703,22 @@ def extract_foot_sticking_sequence_velocity(smpl_joints, demo_joints, foot_names
     Returns:
         list: List of contact dictionaries for each frame.
     """
-
+    # 获得脚趾的索引
     left_toe_idx = demo_joints.index(foot_names[0])
     right_toe_idx = demo_joints.index(foot_names[1])
 
     # Check xy velocities
+    # 获得人体（缩放后的）的脚趾的全局位置
     left_toe_positions = smpl_joints[:, left_toe_idx, :2]
     right_toe_positions = smpl_joints[:, right_toe_idx, :2]
-
+    # 利用位置差来获得每一帧的脚趾的速度，长度为T-1
     left_toe_velocity = np.linalg.norm(np.diff(left_toe_positions, axis=0), axis=1)
     right_toe_velocity = np.linalg.norm(np.diff(right_toe_positions, axis=0), axis=1)
-
+    # 为了让帧数对齐，对第一帧进行特殊处理，直接第一帧的速度为速度阈值+1
     left_toe_velocity = np.concatenate([[velocity_threshold + 1], left_toe_velocity])
     right_toe_velocity = np.concatenate([[velocity_threshold + 1], right_toe_velocity])
-
+    # 生成每帧的接触布尔值
+    # 遍历每一帧，如果该帧的脚趾水平速度 ≤ 阈值，就认为该脚粘在地面上（True）；否则认为脚在空中滑动（False），所以默认第一帧是滑动的
     return [
         {"L_Toe": left_toe_velocity[i] <= velocity_threshold, "R_Toe": right_toe_velocity[i] <= velocity_threshold}
         for i in range(len(smpl_joints))

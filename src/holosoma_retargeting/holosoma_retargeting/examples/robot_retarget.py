@@ -730,6 +730,7 @@ def main(cfg: RetargetingConfig) -> None:
     )
 
     # Extract foot sticking sequences
+    # 这里获得的是一堆bool值，为[N,2]表示每一帧的左右双脚是否在地面静止还是滑动
     foot_sticking_sequences = extract_foot_sticking_sequence_velocity(human_joints, retargeter.demo_joints, toe_names)
 
     # Task-specific foot sticking adjustments

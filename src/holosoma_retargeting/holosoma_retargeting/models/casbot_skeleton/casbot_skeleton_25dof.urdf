@@ -276,6 +276,27 @@
       effort="0"
       velocity="0" />
   </joint>
+  <link name="left_ankle_intermediate_1_link">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.01"/>
+      <inertia ixx="1e-6" ixy="0" ixz="0" iyy="1e-6" iyz="0" izz="1e-6"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><sphere radius="0.01"/></geometry>
+      <material name="white_intermed_l"><color rgba="0.7 0.7 0.7 1"/></material>
+    </visual>
+    <collision name="left_ankle_intermediate_1_link">
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><sphere radius="0.01"/></geometry>
+    </collision>
+  </link>
+  <joint name="left_ankle_intermediate_1_joint" type="fixed">
+    <origin xyz="0 0 -0.42" rpy="0 0 0"/>
+    <parent link="left_leg_knee_pitch_link"/>
+    <child link="left_ankle_intermediate_1_link"/>
+  </joint>
   <link
     name="left_leg_ankle_pitch_link">
     <inertial>
@@ -391,6 +412,111 @@
       upper="0.50614"
       effort="0"
       velocity="0" />
+  </joint>
+  <link name="left_ankle_roll_sphere_1_link">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.001"/>
+      <inertia ixx="1e-7" ixy="0" ixz="0" iyy="1e-7" iyz="0" izz="1e-7"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><sphere radius="0.005"/></geometry>
+      <material name="dark_l1"><color rgba="0.2 0.2 0.2 1"/></material>
+    </visual>
+    <collision name="left_ankle_roll_sphere_1_link">
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><sphere radius="0.005"/></geometry>
+    </collision>
+  </link>
+  <joint name="left_ankle_roll_sphere_1_joint" type="fixed">
+    <origin xyz="-0.085 0.045 -0.04" rpy="0 0 0"/>
+    <parent link="left_leg_ankle_roll_link"/>
+    <child link="left_ankle_roll_sphere_1_link"/>
+  </joint>
+  <link name="left_ankle_roll_sphere_2_link">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.001"/>
+      <inertia ixx="1e-7" ixy="0" ixz="0" iyy="1e-7" iyz="0" izz="1e-7"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><sphere radius="0.005"/></geometry>
+      <material name="dark_l2"><color rgba="0.2 0.2 0.2 1"/></material>
+    </visual>
+    <collision name="left_ankle_roll_sphere_2_link">
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><sphere radius="0.005"/></geometry>
+    </collision>
+  </link>
+  <joint name="left_ankle_roll_sphere_2_joint" type="fixed">
+    <origin xyz="-0.085 -0.045 -0.04" rpy="0 0 0"/>
+    <parent link="left_leg_ankle_roll_link"/>
+    <child link="left_ankle_roll_sphere_2_link"/>
+  </joint>
+  <link name="left_ankle_roll_sphere_3_link">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.001"/>
+      <inertia ixx="1e-7" ixy="0" ixz="0" iyy="1e-7" iyz="0" izz="1e-7"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><sphere radius="0.005"/></geometry>
+      <material name="dark_l3"><color rgba="0.2 0.2 0.2 1"/></material>
+    </visual>
+    <collision name="left_ankle_roll_sphere_3_link">
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><sphere radius="0.005"/></geometry>
+    </collision>
+  </link>
+  <joint name="left_ankle_roll_sphere_3_joint" type="fixed">
+    <origin xyz="0.155 0.045 -0.04" rpy="0 0 0"/>
+    <parent link="left_leg_ankle_roll_link"/>
+    <child link="left_ankle_roll_sphere_3_link"/>
+  </joint>
+  <link name="left_ankle_roll_sphere_4_link">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.001"/>
+      <inertia ixx="1e-7" ixy="0" ixz="0" iyy="1e-7" iyz="0" izz="1e-7"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><sphere radius="0.005"/></geometry>
+      <material name="dark_l4"><color rgba="0.2 0.2 0.2 1"/></material>
+    </visual>
+    <collision name="left_ankle_roll_sphere_4_link">
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><sphere radius="0.005"/></geometry>
+    </collision>
+  </link>
+  <joint name="left_ankle_roll_sphere_4_joint" type="fixed">
+    <origin xyz="0.155 -0.045 -0.04" rpy="0 0 0"/>
+    <parent link="left_leg_ankle_roll_link"/>
+    <child link="left_ankle_roll_sphere_4_link"/>
+  </joint>
+  <link name="left_ankle_roll_sphere_5_link">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.001"/>
+      <inertia ixx="1e-7" ixy="0" ixz="0" iyy="1e-7" iyz="0" izz="1e-7"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><sphere radius="0.005"/></geometry>
+      <material name="dark_l5"><color rgba="0.2 0.2 0.2 1"/></material>
+    </visual>
+    <collision name="left_ankle_roll_sphere_5_link">
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><sphere radius="0.005"/></geometry>
+    </collision>
+  </link>
+  <joint name="left_ankle_roll_sphere_5_joint" type="fixed">
+    <origin xyz="0.175 0 -0.04" rpy="0 0 0"/>
+    <parent link="left_leg_ankle_roll_link"/>
+    <child link="left_ankle_roll_sphere_5_link"/>
   </joint>
   <link
     name="right_leg_pelvic_pitch_link">
@@ -624,6 +750,27 @@
       effort="0"
       velocity="0" />
   </joint>
+  <link name="right_ankle_intermediate_1_link">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.01"/>
+      <inertia ixx="1e-6" ixy="0" ixz="0" iyy="1e-6" iyz="0" izz="1e-6"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><sphere radius="0.01"/></geometry>
+      <material name="white_intermed_r"><color rgba="0.7 0.7 0.7 1"/></material>
+    </visual>
+    <collision name="right_ankle_intermediate_1_link">
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><sphere radius="0.01"/></geometry>
+    </collision>
+  </link>
+  <joint name="right_ankle_intermediate_1_joint" type="fixed">
+    <origin xyz="0 0 -0.42" rpy="0 0 0"/>
+    <parent link="right_leg_knee_pitch_link"/>
+    <child link="right_ankle_intermediate_1_link"/>
+  </joint>
   <link
     name="right_leg_ankle_pitch_link">
     <inertial>
@@ -739,6 +886,111 @@
       upper="0.50614"
       effort="0"
       velocity="0" />
+  </joint>
+  <link name="right_ankle_roll_sphere_1_link">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.001"/>
+      <inertia ixx="1e-7" ixy="0" ixz="0" iyy="1e-7" iyz="0" izz="1e-7"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><sphere radius="0.005"/></geometry>
+      <material name="dark_r1"><color rgba="0.2 0.2 0.2 1"/></material>
+    </visual>
+    <collision name="right_ankle_roll_sphere_1_link">
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><sphere radius="0.005"/></geometry>
+    </collision>
+  </link>
+  <joint name="right_ankle_roll_sphere_1_joint" type="fixed">
+    <origin xyz="-0.085 -0.045 -0.04" rpy="0 0 0"/>
+    <parent link="right_leg_ankle_roll_link"/>
+    <child link="right_ankle_roll_sphere_1_link"/>
+  </joint>
+  <link name="right_ankle_roll_sphere_2_link">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.001"/>
+      <inertia ixx="1e-7" ixy="0" ixz="0" iyy="1e-7" iyz="0" izz="1e-7"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><sphere radius="0.005"/></geometry>
+      <material name="dark_r2"><color rgba="0.2 0.2 0.2 1"/></material>
+    </visual>
+    <collision name="right_ankle_roll_sphere_2_link">
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><sphere radius="0.005"/></geometry>
+    </collision>
+  </link>
+  <joint name="right_ankle_roll_sphere_2_joint" type="fixed">
+    <origin xyz="-0.085 0.045 -0.04" rpy="0 0 0"/>
+    <parent link="right_leg_ankle_roll_link"/>
+    <child link="right_ankle_roll_sphere_2_link"/>
+  </joint>
+  <link name="right_ankle_roll_sphere_3_link">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.001"/>
+      <inertia ixx="1e-7" ixy="0" ixz="0" iyy="1e-7" iyz="0" izz="1e-7"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><sphere radius="0.005"/></geometry>
+      <material name="dark_r3"><color rgba="0.2 0.2 0.2 1"/></material>
+    </visual>
+    <collision name="right_ankle_roll_sphere_3_link">
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><sphere radius="0.005"/></geometry>
+    </collision>
+  </link>
+  <joint name="right_ankle_roll_sphere_3_joint" type="fixed">
+    <origin xyz="0.155 -0.045 -0.04" rpy="0 0 0"/>
+    <parent link="right_leg_ankle_roll_link"/>
+    <child link="right_ankle_roll_sphere_3_link"/>
+  </joint>
+  <link name="right_ankle_roll_sphere_4_link">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.001"/>
+      <inertia ixx="1e-7" ixy="0" ixz="0" iyy="1e-7" iyz="0" izz="1e-7"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><sphere radius="0.005"/></geometry>
+      <material name="dark_r4"><color rgba="0.2 0.2 0.2 1"/></material>
+    </visual>
+    <collision name="right_ankle_roll_sphere_4_link">
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><sphere radius="0.005"/></geometry>
+    </collision>
+  </link>
+  <joint name="right_ankle_roll_sphere_4_joint" type="fixed">
+    <origin xyz="0.155 0.045 -0.04" rpy="0 0 0"/>
+    <parent link="right_leg_ankle_roll_link"/>
+    <child link="right_ankle_roll_sphere_4_link"/>
+  </joint>
+  <link name="right_ankle_roll_sphere_5_link">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.001"/>
+      <inertia ixx="1e-7" ixy="0" ixz="0" iyy="1e-7" iyz="0" izz="1e-7"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><sphere radius="0.005"/></geometry>
+      <material name="dark_r5"><color rgba="0.2 0.2 0.2 1"/></material>
+    </visual>
+    <collision name="right_ankle_roll_sphere_5_link">
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><sphere radius="0.005"/></geometry>
+    </collision>
+  </link>
+  <joint name="right_ankle_roll_sphere_5_joint" type="fixed">
+    <origin xyz="0.175 0 -0.04" rpy="0 0 0"/>
+    <parent link="right_leg_ankle_roll_link"/>
+    <child link="right_ankle_roll_sphere_5_link"/>
   </joint>
   <link
     name="waist_yaw_link">

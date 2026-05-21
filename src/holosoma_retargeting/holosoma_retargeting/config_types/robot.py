@@ -158,8 +158,14 @@ class RobotConfig:
             ]
         if self.robot_type == "casbot":
             return [
-                "left_leg_ankle_roll_link",
-                "right_leg_ankle_roll_link",
+                "left_ankle_roll_sphere_1_link",
+                "right_ankle_roll_sphere_1_link",
+                "left_ankle_roll_sphere_2_link",
+                "right_ankle_roll_sphere_2_link",
+                "left_ankle_roll_sphere_3_link",
+                "right_ankle_roll_sphere_3_link",
+                "left_ankle_roll_sphere_4_link",
+                "right_ankle_roll_sphere_4_link",
             ]
         if self.robot_type == "casbot_skeleton":
             return [

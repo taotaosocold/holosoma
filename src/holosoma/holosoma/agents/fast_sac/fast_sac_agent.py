@@ -76,6 +76,7 @@ class FastSACEnv:
 
     def step(self, actions: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, dict[str, Any]]:
         # Actions are now already scaled by the actor, so pass them directly to the environment
+        # 和环境交互获得观测和奖励和重置情况
         obs_dict, rew_buf, reset_buf, info_dict = self._env.step({"actions": actions})  # type: ignore[attr-defined]
         actor_obs = torch.cat([obs_dict[k] for k in self._actor_obs_keys], dim=1)
         critic_obs = torch.cat([obs_dict[k] for k in self._critic_obs_keys], dim=1)
@@ -412,21 +413,32 @@ class FastSACAgent(BaseAlgo):
         qnet_target = self.qnet_target
         q_optimizer = self.q_optimizer
         alpha_optimizer = self.alpha_optimizer
-
+        # 在混合精度下提取输入
         with self._maybe_amp():
+            # 获得下一个actor的obs
             next_observations = data["next"]["observations"]
+            # 获得当前critic的obs
             critic_observations = data["critic_observations"]
+            # 获得下一个critic的obs
             next_critic_observations = data["next"]["critic_observations"]
+            # 获得当前的动作
             actions = data["actions"]
+            # 获得当前状态执行当前动作获得的奖励
             rewards = data["next"]["rewards"]
             dones = data["next"]["dones"].bool()
             truncations = data["next"]["truncations"].bool()
+            # 指示下一状态是否应当参与价值估计，若为自然终止（dones=True 且 truncations=False），下一状态的价值为 0，bootstrap=0
+            # 若为截断或未终止，bootstrap=1，下一状态的价值需要被计入目标
             bootstrap = (truncations | ~dones).float()
 
             with torch.no_grad():
+                # 根据下一个状态和actor网络交互采样获得下一个状态会执行的动作，以及这个动作的概率
                 next_state_actions, next_state_log_probs = actor.get_actions_and_log_probs(next_observations)
+                # 获得折扣率
                 discount = args.gamma ** data["next"]["effective_n_steps"]
-
+                # 这里是FASTSAC的第一个创新点
+                # 用户手动设置V_min和V_max（这两个值这里没有但在内部设置了），然后设置N个点，那么就能均匀获得N个V_i，然后
+                # 网络会输出每个点的概率，即每个回报点的概率。
                 target_distributions = qnet_target.projection(
                     next_critic_observations,
                     next_state_actions,
@@ -434,18 +446,23 @@ class FastSACAgent(BaseAlgo):
                     bootstrap,
                     discount,
                 )
+                # 根据概率和用户设置的回报值来计算Q值
                 target_values = qnet_target.get_value(target_distributions)
+                # 这里max和min是所有batch中的Q最大值和Q最小值，这里只是做记录而已
                 target_value_max = target_values.max()
                 target_value_min = target_values.min()
-
+            # 这里一样是Z(s,a)输出每个V_i的概率（其实不是概率，是logits经过softmax后就是概率了）
+            # 这里的网络和上面的target_distributions不同的是，前者是目标网络，就是DQN常用的那个双网络
+            # critic_log_probs输出的东西的性质和target_distributions是一样的
             q_outputs = qnet(critic_observations, actions)
             critic_log_probs = F.log_softmax(q_outputs, dim=-1)
+            # 损失为交叉熵，希望目标网络和真正的价值网络去靠近
             critic_losses = -torch.sum(target_distributions * critic_log_probs, dim=-1)
             qf_loss = critic_losses.mean(dim=1).sum(dim=0)
 
         q_optimizer.zero_grad(set_to_none=True)
         scaler.scale(qf_loss).backward()
-
+        # 如果是多GPU，将所有GPU上的critic梯度求和取平均
         if self.is_multi_gpu:
             self._all_reduce_model_grads(qnet)
 
@@ -495,19 +512,24 @@ class FastSACAgent(BaseAlgo):
 
         with self._maybe_amp():
             critic_observations = data["critic_observations"]
-
+            # 获得动作和对应的概率
             actions, log_probs = actor.get_actions_and_log_probs(data["observations"])
             # For logging, this is a bit wasteful though, but could be useful
             with torch.no_grad():
                 _, _, log_std = actor(data["observations"])
                 action_std = log_std.exp().mean()
                 # Compute policy entropy (negative log probability)
+                # 熵正则
                 policy_entropy = -log_probs.mean()
-
+            # 获得每个V_i点的logits值
             q_outputs = qnet(critic_observations, actions)
+            # softmax获得个概率值
             q_probs = F.softmax(q_outputs, dim=-1)
+            # 加权和获得Q值
             q_values = qnet.get_value(q_probs)
+            # 将batch的Q值平均，这里获得的为[num_q_networs]的形状，即包含Q网络的数量
             qf_value = q_values.mean(dim=0)
+            # 经典最大化+熵正则，只不过最后是.mean也就是取Q网络的均值，而不是最小值
             actor_loss = (self.log_alpha.exp().detach() * log_probs - qf_value).mean()
 
         actor_optimizer.zero_grad(set_to_none=True)
@@ -646,10 +668,11 @@ class FastSACAgent(BaseAlgo):
         self.scaler.load_state_dict(torch_checkpoint["grad_scaler_state_dict"])
         self.global_step = torch_checkpoint["global_step"]
         self._restore_env_state(torch_checkpoint.get("env_state"))
-
+    # 梦开始的地方
     def learn(self) -> None:
         args = self.config
         device = self.device
+        # 如果配置中 compile=True，则用 torch.compile 将四个核心函数（Critic 更新、Actor 更新、探索策略、观测归一化）编译为优化版本，加速推理和训练
         if args.compile:
             update_main = torch.compile(self._update_main)
             update_pol = torch.compile(self._update_pol)
@@ -662,41 +685,53 @@ class FastSACAgent(BaseAlgo):
             policy = self.policy
             normalize_obs = self.obs_normalizer.forward
             normalize_critic_obs = self.critic_obs_normalizer.forward
+        # 将网络、环境、缓冲区绑定到局部变量，后续循环中访问更快（避免每次都查找 self.xxx）
         qnet = self.qnet
         qnet_target = self.qnet_target
         env = self.env
         rb = self.rb
-
+        # 环境初始化，并且获得初始化的观测
         obs, critic_obs = env.reset_with_critic_obs()
+        # 将critic_obs转为张量并移动到训练设备上（actor的obs已经是张量了所以无须转换）
         critic_obs = torch.as_tensor(critic_obs, device=device, dtype=torch.float)
 
         dones = None
         # Initialize metrics that might not be updated every step
+        # 初始化变量
         policy_entropy = torch.tensor(0.0, device=device)
         action_std = torch.tensor(0.0, device=device)
         actor_loss = torch.tensor(0.0, device=device)
         actor_grad_norm = torch.tensor(0.0, device=device)
         pbar = tqdm.tqdm(total=args.num_learning_iterations, initial=self.global_step)
-
+        # 开始训练，这里和PPO有个不一样的点，PPO是每一个回合采样很多个step，然后进行一次反向传播，而SAC算是没有回合，因为有经验回放所以
+        # 样本够多，每采样一次就进行一次网络的更新
         while self.global_step <= args.num_learning_iterations:
             # Synchronize curriculum metrics across GPUs before rollout
+            # 如果使用多 GPU 且启用了课程学习，会在 rollout 前同步各卡的环境指标（例如平均成功率），确保所有卡采用相同的课程阶段
             if self.is_multi_gpu:
                 self._synchronize_curriculum_metrics()
-
+            # 记录数据收集耗时
             with self.logging_helper.record_collection_time():
+                # 这里如果使用amp则使用混合精度上下文，加速推理
                 with torch.no_grad(), self._maybe_amp():
+                    # 归一化观测
                     norm_obs = normalize_obs(obs, update=False)
+                    # 前向传播，观测获得动作
                     actions = policy(obs=norm_obs, dones=dones)
-
+                # 动作和环境交互获得下一个actor观测和奖励等
                 next_obs, rewards, dones, infos = env.step(actions.float())
+                # 这里要记录被时间终止的环境，因为时间终止获得的next_obs可能是全0或者默认值，反正就是不准确的值
                 truncations = infos["time_outs"]
 
                 # Update episode stats using logging helper
+                # 记录奖励和终止情况
                 self.logging_helper.update_episode_stats(rewards, dones, infos)
-
+                # 获得critic的下一个观测
                 next_critic_obs = infos["observations"]["critic"]
 
                 # Compute 'true' next_obs and next_critic_obs for saving
+                # 对于被时间终止的环境，会拿infos中的final里的obs来代替next_obs，而不是env.step获得的因为那个不准确（内部重置代码导致的）
+                # 但是贝尔曼方程这里状态不能搞错，所以会特意为了这一步去存储真正的next_obs
                 true_next_obs = torch.where(
                     truncations[:, None] > 0, infos["observations"]["final"]["actor_obs"], next_obs
                 )
@@ -705,6 +740,7 @@ class FastSACAgent(BaseAlgo):
                     infos["observations"]["final"]["critic_obs"],
                     next_critic_obs,
                 )
+                # 构建一个TensorDict保存当前的几个经验，除了标准的(s, a, r, s', done)还包括critic_obs和truncations（区分时间终止和其他终止）和next_critic_obs
                 transition = TensorDict(
                     {
                         "observations": obs,
@@ -721,20 +757,25 @@ class FastSACAgent(BaseAlgo):
                 )
                 transition["critic_observations"] = critic_obs
                 transition["next"]["critic_observations"] = true_next_critic_obs
-
+                # 将actor的obs和critic的obs放入replay_buffer
                 obs = next_obs
                 critic_obs = next_critic_obs
 
                 rb.extend(transition)
 
             # NOTE: args.batch_size is the global batch size
+            # 计算每个 GPU 的实际 mini-batch 大小。args.batch_size 是全局希望的批量大小，除以环境数和 GPU 数，确保总的并行样本数合理。至少为 1
             batch_size = max(args.batch_size // env.num_envs // self.gpu_world_size, 1)
+            # 这里有个判断是防止开局的时候采样一次就开始更新，这样经验回放池样本太少，更新没太大意义，这里是开局采样到一定数量才会开始反向更新后续才是每采样一次更新一次。
             if self.global_step > args.learning_starts:
                 with self.logging_helper.record_learn_time():
                     # Use batched sampling: sample once, normalize once, split into updates
+                    # _sample_and_prepare_batches 一次性从 buffer 采样一个 batch_size * num_updates 的大 batch
+                    # 如果需要对称增强则在此处展开，然后用 normalize_obs 和 normalize_critic_obs 对整个大 batch 做观测归一化，最后切分成 num_updates 个小 batch 返回
                     prepared_batches = self._sample_and_prepare_batches(
                         batch_size, args.num_updates, normalize_obs, normalize_critic_obs
                     )
+                    # 遍历经验回放池采样的batches，然后依次经过update_main即更新函数，这里只更新critic网络，返回奖励均值、Q损失、Q的最值
                     for i, data in enumerate(prepared_batches):
                         # Data is already normalized, just run the updates
                         (
@@ -745,6 +786,8 @@ class FastSACAgent(BaseAlgo):
                             qf_min,
                             alpha_loss,
                         ) = update_main(data)
+                        # 这里并非每次critic更新都更新actor，而是按照policy_frequency的频率进行更新，这样可以等critic稳定后在更新actor
+                        # update_pol更新的是actor网络
                         if args.num_updates > 1:
                             if i % args.policy_frequency == 1:
                                 actor_grad_norm, actor_loss, policy_entropy, action_std = update_pol(data)
@@ -766,7 +809,7 @@ class FastSACAgent(BaseAlgo):
                             "action_std": action_std,
                         }
                         self.training_metrics.add(current_metrics)
-
+                        # 每次更新完价值网络后，软更新目标网络
                         with torch.no_grad():
                             src_ps = [p.data for p in qnet.parameters()]
                             tgt_ps = [p.data for p in qnet_target.parameters()]
